@@ -16,6 +16,8 @@ import java.util.UUID;
 import java.util.function.Supplier;
 import java.util.stream.Stream;
 
+import cds.gen.adminservice.AddItemContext;
+import com.sap.cds.CdsList;
 import org.springframework.stereotype.Component;
 
 import com.sap.cds.Result;
@@ -170,6 +172,20 @@ class AdminServiceHandler implements EventHandler {
 		}
 	}
 
+	@On(event = AddItemContext.CDS_NAME)
+	public void addItem(AddItemContext context) {
+		OrderItems newItem = OrderItems.create();
+		newItem.setId(UUID.randomUUID().toString());
+		newItem.setBookId(context.getBookId());
+		newItem.setQuantity(context.getQuantity());
+
+		Orders order = Orders.create();
+		order.setItems(CdsList.delta(newItem));
+
+		Orders orders = adminService.run(Update.entity(context.getCqn().ref()).data(order)).single(Orders.class);
+		context.setResult(orders);
+	}
+
 	private BigDecimal calculateAmountInDraft(String orderItemId, Integer newQuantity, String newBookId, boolean includeWarnings) {
 		Integer quantity = newQuantity;
 		String bookId = newBookId;
@@ -252,14 +268,8 @@ class AdminServiceHandler implements EventHandler {
 		// get ID of the book on which the action was called (bound action)
 		String bookId = (String) analyzer.analyze(context.getCqn()).targetKeys().get(Books.ID);
 
-		// create order item
-		OrderItems newItem = OrderItems.create();
-		newItem.setId(UUID.randomUUID().toString());
-		newItem.setBookId(bookId);
-		newItem.setQuantity(context.getQuantity());
-		order.getItems().add(newItem);
+		Orders updatedOrder = adminService.addItem(order.ref(), bookId, context.getQuantity());
 
-		Orders updatedOrder = adminService.run(Update.entity(ORDERS).data(order)).single(Orders.class);
 		messages.success(MessageKeys.BOOK_ADDED_ORDER);
 		context.setResult(updatedOrder);
 	}

@@ -8,7 +8,9 @@ service AdminService @(requires : 'admin') {
   }
 
   entity Authors as projection on my.Authors;
-  entity Orders  as select from my.Orders;
+  entity Orders  as select from my.Orders actions {
+    action addItem(book_ID: UUID, quantity: Integer) returns Orders;
+  }
 
   @cds.persistence.skip
   entity Upload @odata.singleton {

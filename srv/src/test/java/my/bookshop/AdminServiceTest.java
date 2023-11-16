@@ -2,11 +2,16 @@ package my.bookshop;
 
 import static cds.gen.adminservice.AdminService_.AUTHORS;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import java.math.BigDecimal;
 import java.util.Collections;
 
+import cds.gen.adminservice.OrderItems_;
+import com.sap.cds.CdsList;
+import com.sap.cds.ql.CQL;
+import com.sap.cds.ql.Select;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -94,6 +99,30 @@ public class AdminServiceTest {
 		ServiceException exception =
 			assertThrows(ServiceException.class, () -> adminService.run(Insert.into(Orders_.class).entry(order)));
 		assertEquals(CdsErrorStatuses.TARGET_ENTITY_MISSING.getCodeString(), exception.getErrorStatus().getCodeString());
+	}
+
+	@Test
+	@WithMockUser(username = "admin")
+	void testAddItemWithBook() {
+		Orders order = Orders.create();
+		order.setOrderNo("324");
+		order.setShippingAddressId("100");
+		OrderItems item = OrderItems.create();
+		item.setQuantity(5);
+		item.setAmount(BigDecimal.valueOf(12.12));
+		item.setBookId("4a519e61-3c3a-4bd9-ab12-d7e0c5329933");
+		order.setItems(Collections.singletonList(item));
+
+		Orders createdOrder = adminService.run(Insert.into(Orders_.class).entry(order)).single(Orders.class);
+
+		// Below does not work, ref resolves not to service entity AdminService.Orders, but to database entity my.bookshop.Orders
+		// Orders_ ref = createdOrder.ref();
+		Orders_ ref = CQL.entity(Orders_.class).filter( o -> o.ID().eq(createdOrder.getId()).and(o.IsActiveEntity().eq(createdOrder.getIsActiveEntity())));
+
+		adminService.addItem(ref, "aebdfc8a-0dfa-4468-bd36-48aabd65e663", 4);
+
+		Orders updatedOrder = adminService.run(Select.from(ref).columns(o -> o.Items().expand())).single(Orders.class);
+		assertEquals(2, updatedOrder.getItems().size());
 	}
 
 }
